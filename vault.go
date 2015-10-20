@@ -10,6 +10,7 @@ import (
 // Vault Errors
 var (
 	ErrVaultMustBeDir = errors.New("vault must be a directory")
+	ErrInvalidProfile = errors.New("invalid profile")
 )
 
 type Vault struct {
@@ -46,4 +47,30 @@ func (v *Vault) ProfileNames() ([]string, error) {
 	}
 
 	return profiles, nil
+}
+
+func (v *Vault) Profile(profile string) (*Profile, error) {
+	profileStat, err := os.Stat(filepath.Join(v.dir, profile, "profile.js"))
+	if err != nil {
+		if err.(*os.PathError).Err == os.ErrNotExist {
+			return nil, ErrInvalidProfile
+		}
+		return nil, err.(*os.PathError).Err
+	}
+
+	if !profileStat.Mode().IsRegular() {
+		return nil, ErrInvalidProfile
+	}
+
+	p := &Profile{
+		vault:   v,
+		profile: profile,
+		data:    make(map[string]interface{}),
+	}
+	err = p.readData()
+	if err != nil {
+		return nil, err
+	}
+
+	return p, nil
 }
