@@ -1,19 +1,56 @@
 package opvault
 
 import (
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
+
+	"golang.org/x/crypto/pbkdf2"
+)
+
+// Profile errors
+var (
+	ErrInvalidPassword = errors.New("invalid password")
+	ErrProfileLocked   = errors.New("profile locked")
 )
 
 type Profile struct {
 	vault   *Vault
 	profile string
 
+	derivedKey []byte
+	derivedMAC []byte
+
 	data map[string]interface{}
+}
+
+func (p *Profile) Unlock(password string) error {
+	key := pbkdf2.Key([]byte(password), p.Salt(), p.Iterations(), 64, sha512.New)
+	p.derivedKey, p.derivedMAC = key[:32], key[32:]
+
+	masterKey, err := decryptOpdata01(p.getDataBytes("masterKey"), p.derivedKey, p.derivedMAC)
+	if err != nil {
+		if err == ErrInvalidOpdata {
+			return ErrInvalidPassword
+		}
+		return err
+	}
+
+	wipeSlice(masterKey)
+	return nil
+}
+
+func (p *Profile) Lock() {
+	wipeSlice(p.derivedKey)
+	p.derivedKey = nil
+
+	wipeSlice(p.derivedMAC)
+	p.derivedMAC = nil
 }
 
 func (p *Profile) Profile() string {
@@ -24,7 +61,7 @@ func (p *Profile) ProfileName() string {
 	return p.getDataString("profileName")
 }
 
-func (p *Profile) Uuid() string {
+func (p *Profile) UUID() string {
 	return p.getDataString("uuid")
 }
 
@@ -46,6 +83,22 @@ func (p *Profile) CreatedAt() time.Time {
 
 func (p *Profile) UpdatedAt() time.Time {
 	return time.Unix(p.getDataInt64("updatedAt"), 0)
+}
+
+func (p *Profile) overviewKey() ([]byte, error) {
+	if p.derivedKey == nil || p.derivedMAC == nil {
+		return nil, ErrProfileLocked
+	}
+
+	return decryptOpdata01(p.getDataBytes("overviewKey"), p.derivedKey, p.derivedMAC)
+}
+
+func (p *Profile) masterKey() ([]byte, error) {
+	if p.derivedKey == nil || p.derivedMAC == nil {
+		return nil, ErrProfileLocked
+	}
+
+	return decryptOpdata01(p.getDataBytes("masterKey"), p.derivedKey, p.derivedMAC)
 }
 
 func (p *Profile) getDataInt(key string) int {
@@ -85,9 +138,8 @@ func (p *Profile) readData() error {
 	if err != nil {
 		if err == io.ErrUnexpectedEOF {
 			return ErrInvalidProfile
-		} else {
-			return err
 		}
+		return err
 	}
 	if string(preamble) != "var profile=" {
 		return ErrInvalidProfile
