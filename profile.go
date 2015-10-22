@@ -2,7 +2,6 @@ package opvault
 
 import (
 	"crypto/sha512"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -28,14 +27,14 @@ type Profile struct {
 	derivedKey []byte
 	derivedMAC []byte
 
-	data map[string]interface{}
+	data dataMap
 }
 
 func (p *Profile) Unlock(password string) error {
 	key := pbkdf2.Key([]byte(password), p.Salt(), p.Iterations(), 64, sha512.New)
 	p.derivedKey, p.derivedMAC = key[:32], key[32:]
 
-	masterKey, err := decryptOpdata01(p.getDataBytes("masterKey"), p.derivedKey, p.derivedMAC)
+	masterKey, err := decryptOpdata01(p.data.getBytes("masterKey"), p.derivedKey, p.derivedMAC)
 	if err != nil {
 		if err == ErrInvalidOpdata {
 			return ErrInvalidPassword
@@ -60,31 +59,31 @@ func (p *Profile) Profile() string {
 }
 
 func (p *Profile) ProfileName() string {
-	return p.getDataString("profileName")
+	return p.data.getString("profileName")
 }
 
 func (p *Profile) UUID() string {
-	return p.getDataString("uuid")
+	return p.data.getString("uuid")
 }
 
 func (p *Profile) PasswordHint() string {
-	return p.getDataString("passwordHint")
+	return p.data.getString("passwordHint")
 }
 
 func (p *Profile) Salt() []byte {
-	return p.getDataBytes("salt")
+	return p.data.getBytes("salt")
 }
 
 func (p *Profile) Iterations() int {
-	return p.getDataInt("iterations")
+	return p.data.getInt("iterations")
 }
 
 func (p *Profile) CreatedAt() time.Time {
-	return time.Unix(p.getDataInt64("createdAt"), 0)
+	return time.Unix(p.data.getInt64("createdAt"), 0)
 }
 
 func (p *Profile) UpdatedAt() time.Time {
-	return time.Unix(p.getDataInt64("updatedAt"), 0)
+	return time.Unix(p.data.getInt64("updatedAt"), 0)
 }
 
 func (p *Profile) Items() ([]*Item, error) {
@@ -101,7 +100,7 @@ func (p *Profile) overviewKeys() ([]byte, []byte, error) {
 		return nil, nil, ErrProfileLocked
 	}
 
-	decryptedOverviewKey, err := decryptOpdata01(p.getDataBytes("overviewKey"), p.derivedKey, p.derivedMAC)
+	decryptedOverviewKey, err := decryptOpdata01(p.data.getBytes("overviewKey"), p.derivedKey, p.derivedMAC)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -118,7 +117,7 @@ func (p *Profile) masterKeys() ([]byte, []byte, error) {
 		return nil, nil, ErrProfileLocked
 	}
 
-	decryptedMasterKey, err := decryptOpdata01(p.getDataBytes("masterKey"), p.derivedKey, p.derivedMAC)
+	decryptedMasterKey, err := decryptOpdata01(p.data.getBytes("masterKey"), p.derivedKey, p.derivedMAC)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -128,31 +127,6 @@ func (p *Profile) masterKeys() ([]byte, []byte, error) {
 	keys := d.Sum(nil)
 
 	return keys[:32], keys[32:], nil
-}
-
-func (p *Profile) getDataInt(key string) int {
-	val, _ := p.data[key].(float64)
-	return int(val)
-}
-
-func (p *Profile) getDataInt64(key string) int64 {
-	val, _ := p.data[key].(float64)
-	return int64(val)
-}
-
-func (p *Profile) getDataString(key string) string {
-	str, _ := p.data[key].(string)
-	return str
-}
-
-func (p *Profile) getDataBytes(key string) []byte {
-	str, _ := p.data[key].(string)
-	if str == "" {
-		return nil
-	}
-
-	data, _ := base64.StdEncoding.DecodeString(str)
-	return data
 }
 
 func (p *Profile) readData() error {

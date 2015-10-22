@@ -5,7 +5,6 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -85,12 +84,12 @@ func (ic ItemCategory) String() string {
 type Item struct {
 	profile *Profile
 
-	data     map[string]interface{}
-	overview map[string]interface{}
+	data     dataMap
+	overview dataMap
 }
 
 func (i *Item) Category() ItemCategory {
-	return ItemCategory(i.getDataString("category"))
+	return ItemCategory(i.data.getString("category"))
 }
 
 func (i *Item) Overview() map[string]interface{} {
@@ -103,7 +102,7 @@ func (i *Item) Detail() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	detailData, err := decryptOpdata01(i.getDataBytes("d"), itemKey, itemMAC)
+	detailData, err := decryptOpdata01(i.data.getBytes("d"), itemKey, itemMAC)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +117,7 @@ func (i *Item) Detail() (map[string]interface{}, error) {
 }
 
 func (i *Item) itemKeys() ([]byte, []byte, error) {
-	k := i.getDataBytes("k")
+	k := i.data.getBytes("k")
 	if len(k) == 0 {
 		return nil, nil, ErrInvalidItemKey
 	}
@@ -158,28 +157,13 @@ func (i *Item) itemKeys() ([]byte, []byte, error) {
 	return keys[len(keys)-64 : len(keys)-32], keys[len(keys)-32:], nil
 }
 
-func (i *Item) getDataString(key string) string {
-	str, _ := i.data[key].(string)
-	return str
-}
-
-func (i *Item) getDataBytes(key string) []byte {
-	str, _ := i.data[key].(string)
-	if str == "" {
-		return nil
-	}
-
-	data, _ := base64.StdEncoding.DecodeString(str)
-	return data
-}
-
 func readItem(profile *Profile, data map[string]interface{}) (*Item, error) {
 	item := &Item{
 		profile: profile,
 		data:    data,
 	}
 
-	overviewData := item.getDataBytes("o")
+	overviewData := item.data.getBytes("o")
 	if len(overviewData) == 0 {
 		return item, nil
 	}
