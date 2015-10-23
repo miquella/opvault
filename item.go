@@ -92,11 +92,19 @@ func (i *Item) Category() ItemCategory {
 	return ItemCategory(i.data.getString("category"))
 }
 
-func (i *Item) Overview() map[string]interface{} {
-	return i.overview
+func (i *Item) Title() string {
+	return i.overview.getString("title")
 }
 
-func (i *Item) Detail() (map[string]interface{}, error) {
+func (i *Item) Trashed() bool {
+	return i.overview.getBool("trashed")
+}
+
+func (i *Item) Tags() []string {
+	return i.overview.getStringSlice("tags")
+}
+
+func (i *Item) Detail() (*ItemDetail, error) {
 	itemKey, itemMAC, err := i.itemKeys()
 	if err != nil {
 		return nil, err
@@ -107,8 +115,8 @@ func (i *Item) Detail() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	detail := make(map[string]interface{})
-	err = json.Unmarshal(detailData, &detail)
+	detail := &ItemDetail{make(dataMap)}
+	err = json.Unmarshal(detailData, &detail.data)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +171,8 @@ func readItem(profile *Profile, data map[string]interface{}) (*Item, error) {
 		data:    data,
 	}
 
+	// TODO: validate hmac
+
 	overviewData := item.data.getBytes("o")
 	if len(overviewData) == 0 {
 		return item, nil
@@ -187,4 +197,134 @@ func readItem(profile *Profile, data map[string]interface{}) (*Item, error) {
 	}
 
 	return item, nil
+}
+
+type ItemDetail struct {
+	data dataMap
+}
+
+func (id *ItemDetail) Fields() []*Field {
+	fieldMaps := id.data.getMapSlice("fields")
+
+	fields := []*Field{}
+	for _, fieldMap := range fieldMaps {
+		fields = append(fields, &Field{fieldMap})
+	}
+
+	return fields
+}
+
+func (id *ItemDetail) Notes() string {
+	return id.data.getString("notesPlain")
+}
+
+func (id *ItemDetail) Sections() []*Section {
+	sectionMaps := id.data.getMapSlice("sections")
+
+	sections := []*Section{}
+	for _, sectionMap := range sectionMaps {
+		sections = append(sections, &Section{sectionMap})
+	}
+
+	return sections
+}
+
+type Field struct {
+	data dataMap
+}
+
+type FieldType string
+
+const (
+	PasswordFieldType  FieldType = "P"
+	TextFieldType      FieldType = "T"
+	EmailFieldType     FieldType = "E"
+	NumberFieldType    FieldType = "N"
+	RadioFieldType     FieldType = "R"
+	TelephoneFieldType FieldType = "TEL"
+	CheckboxFieldType  FieldType = "C"
+	URLFieldType       FieldType = "U"
+)
+
+type FieldDesignation string
+
+const (
+	NoDesignation       FieldDesignation = ""
+	UsernameDesignation FieldDesignation = "username"
+	PasswordDesignation FieldDesignation = "password"
+)
+
+func (f *Field) Type() FieldType {
+	return FieldType(f.data.getString("type"))
+}
+
+func (f *Field) Name() string {
+	return f.data.getString("name")
+}
+
+func (f *Field) Value() string {
+	return f.data.getString("value")
+}
+
+func (f *Field) Designation() FieldDesignation {
+	return FieldDesignation(f.data.getString("designation"))
+}
+
+type Section struct {
+	data dataMap
+}
+
+func (s *Section) Name() string {
+	return s.data.getString("name")
+}
+
+func (s *Section) Title() string {
+	return s.data.getString("title")
+}
+
+func (s *Section) Fields() []*SectionField {
+	fieldMaps := s.data.getMapSlice("fields")
+
+	fields := []*SectionField{}
+	for _, fieldMap := range fieldMaps {
+		fields = append(fields, &SectionField{fieldMap})
+	}
+
+	return fields
+}
+
+type SectionField struct {
+	data dataMap
+}
+
+type FieldKind string
+
+const (
+	ConcealedFieldKind FieldKind = "concealed"
+	AddressFieldKind   FieldKind = "address"
+	DateFieldKind      FieldKind = "date"
+	MonthYearFieldKind FieldKind = "monthYear"
+	StringFieldKind    FieldKind = "string"
+	URLFieldKind       FieldKind = "URL"
+	CCTypeFieldKind    FieldKind = "cctype"
+	PhoneFieldKind     FieldKind = "phone"
+	GenderFieldKind    FieldKind = "gender"
+	EmailFieldKind     FieldKind = "email"
+	MenuFieldKind      FieldKind = "menu"
+)
+
+func (f *SectionField) Kind() FieldKind {
+	return FieldKind(f.data.getString("k"))
+}
+
+func (f *SectionField) Name() string {
+	return f.data.getString("n")
+}
+
+func (f *SectionField) Title() string {
+	return f.data.getString("t")
+}
+
+func (f *SectionField) Value() string {
+	return f.data.getString("v")
 }

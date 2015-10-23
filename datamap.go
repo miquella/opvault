@@ -6,6 +6,11 @@ import (
 
 type dataMap map[string]interface{}
 
+func (d dataMap) getBool(key string) bool {
+	val, _ := d[key].(bool)
+	return val
+}
+
 func (d dataMap) getInt(key string) int {
 	val, _ := d[key].(float64)
 	return int(val)
@@ -29,11 +34,28 @@ func (d dataMap) getStringSlice(key string) []string {
 
 	strs := []string{}
 	for _, i := range val {
-		s, _ := i.(string)
-		strs = append(strs, s)
+		if s, ok := i.(string); ok {
+			strs = append(strs, s)
+		}
 	}
 
 	return strs
+}
+
+func (d dataMap) getMapSlice(key string) []map[string]interface{} {
+	val, _ := d[key].([]interface{})
+	if len(val) == 0 {
+		return []map[string]interface{}{}
+	}
+
+	maps := []map[string]interface{}{}
+	for _, m := range val {
+		if m, ok := m.(map[string]interface{}); ok {
+			maps = append(maps, m)
+		}
+	}
+
+	return maps
 }
 
 func (d dataMap) getBytes(key string) []byte {
