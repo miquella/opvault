@@ -214,6 +214,10 @@ func (id *ItemDetail) Fields() []*Field {
 	return fields
 }
 
+func (id *ItemDetail) Password() string {
+	return id.data.getString("password")
+}
+
 func (id *ItemDetail) Notes() string {
 	return id.data.getString("notesPlain")
 }
