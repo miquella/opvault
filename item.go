@@ -96,6 +96,10 @@ func (i *Item) Title() string {
 	return i.overview.getString("title")
 }
 
+func (i *Item) Url() string {
+	return i.overview.getString("url")
+}
+
 func (i *Item) Trashed() bool {
 	return i.overview.getBool("trashed")
 }
